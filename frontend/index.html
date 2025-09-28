@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Email Classifier — Demo</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+  </head>
+  <body class="bg-light">
+    <nav class="navbar navbar-dark bg-primary mb-4">
+      <div class="container">
+        <span class="navbar-brand mb-0 h1">Email Classifier</span>
+      </div>
+    </nav>
+
+    <main class="container">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title">Carregue um e-mail (.txt / .pdf) ou cole o texto</h5>
+
+          <form id="emailForm" method="post">
+            <div class="mb-3">
+              <label class="form-label">Arquivo (.txt ou .pdf)</label>
+              <input class="form-control" type="file" id="fileInput" accept=".txt, .pdf" />
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">Ou cole o texto do e-mail</label>
+              <textarea id="textInput" class="form-control" rows="7" placeholder="Cole o corpo do e-mail aqui..."></textarea>
+            </div>
+
+            <button id="submitBtn" class="btn btn-primary">Analisar</button>
+            <span id="spinner" class="ms-3 d-none">Processando...</span>
+          </form>
+
+          <hr />
+
+          <div id="result" style="display:none;">
+            <h6>Resultado</h6>
+            <p><strong>Categoria:</strong> <span id="category"></span></p>
+            <p><strong>Confiança:</strong> <span id="confidence"></span></p>
+            <p><strong>Keywords encontradas:</strong> <pre id="keywords" class="small"></pre></p>
+            <p><strong>Resposta sugerida:</strong></p>
+            <div class="border rounded p-3 bg-white">
+              <pre id="suggested" class="mb-0"></pre>
+            </div>
+            <details class="mt-2"><summary>Prévia do texto processado</summary><pre id="preview" class="small"></pre></details>
+          </div>
+
+        </div>
+      </div>
+
+      <footer class="mt-4 text-muted small">
+        <div>Use como POC — para produção, integrar modelo treinado / OpenAI e autenticação.</div>
+      </footer>
+    </main>
+
+    <script>
+      const form = document.getElementById('emailForm')
+      const fileInput = document.getElementById('fileInput')
+      const textInput = document.getElementById('textInput')
+      const submitBtn = document.getElementById('submitBtn')
+      const spinner = document.getElementById('spinner')
+      const resultBox = document.getElementById('result')
+      const categoryEl = document.getElementById('category')
+      const confidenceEl = document.getElementById('confidence')
+      const keywordsEl = document.getElementById('keywords')
+      const suggestedEl = document.getElementById('suggested')
+      const previewEl = document.getElementById('preview')
+
+      form.addEventListener('submit', async (e) =>{
+          e.preventDefault();
+          submitBtn.disabled = true;
+          spinner.classList.remove('d-none');
+          resultBox.style.display = 'none';
+
+          const fd = new FormData();
+          if (fileInput.files.length > 0){
+              fd.append('file', fileInput.files[0]);
+          }
+          const text = textInput.value.trim();
+          if (text.length > 0){
+              fd.append('text', text);
+          }
+
+          try{
+              const res = await fetch("/api/classify", {
+                  method: 'POST',
+                  body: fd
+              });
+
+              if (!res.ok){
+                  const err = await res.json();
+                  alert("Erro: " + (err.error || res.statusText))
+                  return;
+              }
+
+              const data = await res.json();
+              categoryEl.textContent = data.category;
+              confidenceEl.textContent = data.confidence;
+              keywordsEl.textContent = JSON.stringify(data.matched_keywords, null, 2);
+              suggestedEl.textContent = data.suggested_response;
+              resultBox.style.display = 'block';
+          } catch (err){
+              console.error(err);
+              alert('Erro de comunicação com o servidor.');
+          } finally{
+              submitBtn.disabled = false;
+              spinner.classList.add('d-none');
+          }
+      });
+    </script>

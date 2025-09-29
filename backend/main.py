@@ -3,20 +3,16 @@ import io
 import re
 import string
 import PyPDF2
-import openai
+import google.generativeai as genai
+
 
 from typing import Optional
 from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-
-try:
-    import openai
-    OPENAI_AVAILABLE = False
-except Exception:
-    OPENAI_AVAILABLE = False
-
+from sqlalchemy.orm import SessionLocal, Email
+from .config import GEMINI_API_KEY
 try:
     import nltk
     from nltk.corpus import stopwords
@@ -128,70 +124,13 @@ def classify_by_keywords(text: str) -> dict:
         "keywords": matches
     }
 
-def generate_response_template(original_text: str, category: str) -> str:
-    
-    api_key = os.getenv("OPENAI_API_KEY")
-    if OPENAI_AVAILABLE and api_key:
-        try:
-            openai.api_key = api_key
-            messages = [
-                {"role": "system", 
-                "content": "Você é um assistente que escreve respostas automáticas curtas, profissionais e objetivas para e-mails corporativos em português."},
-                {"role": "user",
-                        "content": f"Classificação: {category}\nE-mail:\n{original_text}\n\nGere uma resposta automática breve (2-4 frases) em português, profissional, adequada ao teor do e-mail"}
-            ]
-            resp = openai.ChatCompletion.create(
-                model = "gpt-3.5-turbo",
-                messages=messages,
-                max_tokens = 180,
-                temperature = 0.2,
-            )
-            return resp.choices[0].message["content"].strip()
-        except Exception as e:
-            print("OpenAI call failed:", e)
-    
-    if category.lower() == "produtivo":
-        return(
-            "Olá,\n\n"
-            "Obrigado pelo seu contato. Recebemos sua solicitação e estamos analisando o caso."
-            "Por favor, nos envie (se aplicável) número do pedido, prints ou anexos para agilizar a verificação."
-            "Retornaremos em até 48 horas úteis.\n\nAtenciosamente, \nEquipe de Suporte."
-        )
-    else:
-        return(
-            "Olá,\n\n"
-            "Obrigado pela mensagem! Agradecemos o contato. "
-            "Se precisar de suporte ou tiver uma solicitação específica, por favor encaminhe os detalhes. "
-            "Tenha um ótimo dia!\n\nAtenciosamente,\nEquipe"
-        )
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 @app.post("/api/classify")
-async def classify_endpoint(file: Optional[UploadFile] = File(None), text: Optional[str] = Form(None)):
-    
-    content = ""
-    if file:
-        data = await file.read()
-        filename = (file.filename or "").lower()
-        if filename.endswith(".pdf"):
-            content += extract_text_from_pdf_bytes(data)
-        else:
-            content += extract_text_from_txt_bytes(data)
-    
-    if text:
-        content += ("\n" + text) if content else text
-    
-    if not content or not content.strip():
-        return JSONResponse({"error": "Nenhum contéudo fornecido (arquivo ou texto)."}, status_code=400)
-    
-    processed = preprocess(content)
-    classification = classify_by_keywords(processed)
-    suggested_response = generate_response_template(content, classification["category"])
-    
-    return{
-        "category": classification["category"],
-        "confidence": classification["confidence"],
-        "score": classification["score"],
-        "matched_keywords": classification["keywords"],
-        "suggested_response": suggested_response,
-        "processed_text": processed[:800],
-    }
+async def classify_email():
+    ...

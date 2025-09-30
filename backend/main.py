@@ -4,15 +4,20 @@ import re
 import string
 import PyPDF2
 import google.generativeai as genai
+import sqlite3
 
 
 from typing import Optional
-from fastapi import FastAPI, File, UploadFile, Form
+from fastapi import FastAPI, Depends, Form, Request, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy.orm import SessionLocal, Email
-from .config import GEMINI_API_KEY
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+from .database import SessionLocal, Email
+
+from .classifier import classify_email_with_gemini
+
 try:
     import nltk
     from nltk.corpus import stopwords
@@ -132,5 +137,31 @@ def get_db():
         db.close()
 
 @app.post("/api/classify")
-async def classify_email():
-    ...
+async def classify_email(text: str = Form(...), db: Session = Depends(get_db)):
+    categoria, resposta = classify_email_with_gemini(text)
+    
+    email = Email(texto=text, categoria=categoria, resposta=resposta)
+    db.add(email)
+    db.commit()
+    db.refresh(email)
+    
+    return{
+        "id": email.id,
+        "texto": email.texto,
+        "categoria": email.categoria,
+        "resposta": email.resposta,
+        "created_at": email.created_at
+    }
+
+@app.get("/api/history")
+def get_history(db: Session = Depends(get_db)):
+    emails = db.query(Email).order_by(Email.created_at.desc()).all()
+    return [
+        {
+            "id": email.id,
+            "texto": email.texto,
+            "categoria": email.categoria,
+            "resposta": email.resposta,
+            "created_at": email.created_at
+        }for email in emails
+    ]

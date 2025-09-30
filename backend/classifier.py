@@ -1,31 +1,42 @@
 import google.generativeai as genai
+import os
+
+from dotenv import load_dotenv
 
 from .config import GEMINI_API_KEY
 
+load_dotenv()
 genai.configure(api_key=GEMINI_API_KEY)
 
-def classify_email_with_gemini(texto: str) -> tuple[str, str]:
-    
-    prompt = f"""" 
-    Analise o texto abaixo e classifique se o e-mail é PRODUTIVO ou IMPRODUTIVO.
-    Depois, gere uma resposta educada ao e-mail.
+def classify_email_with_gemini(email_text: str):
+    model = genai.GenerativeModel("models/gemini-2.5-flash")
 
-    Texto: {texto}
-    Responda no formato:
+    prompt = f"""
+    Você é um sistema de classificação de emails.
+    - Se o email requer ação ou resposta → classifique como PRODUTIVO.
+    - Se for apenas felicitação, agradecimento ou sem relevância → classifique como IMPRODUTIVO.
+
+    Retorne no formato:
     Categoria: <Produtivo/Improdutivo>
-    Resposta: <texto da resposta>
+    Resposta: <Mensagem sugerida>
+
+    Email:
+    {email_text}
     """
-    
-    model = genai.GenerativeModel.from_cached_content("gemini-1.5-flash")
+
     response = model.generate_content(prompt)
-    
-    output = response.text.strip()
-    
-    categoria = "Improdutivo"
-    resposta = "Obrigado pelo seu contato."
-    if "Categoria:" in output:
-        parts = output.split("Resposta:")
-        categoria = parts[0].replace("Categoria:", "").strip()
-        resposta = parts[1].strip() if len(parts) > 1 else resposta
-    
-    return categoria, resposta
+
+    resposta = getattr(response, "text", None)
+    if not resposta and response.candidates:
+        resposta = response.candidates[0].content.parts[0].text
+
+    categoria, sugestao = "Desconhecido", ""
+    if resposta:
+        for line in resposta.splitlines():
+            line = line.strip()
+            if line.lower().startswith("categoria"):
+                categoria = line.split(":", 1)[-1].strip()
+            elif line.lower().startswith("resposta"):
+                sugestao = line.split(":", 1)[-1].strip()
+
+    return categoria, sugestao

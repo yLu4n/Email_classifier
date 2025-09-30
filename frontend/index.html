@@ -28,8 +28,8 @@
               <label class="form-label">Ou cole o texto do e-mail</label>
               <textarea id="textInput" class="form-control" rows="7" placeholder="Cole o corpo do e-mail aqui..."></textarea>
             </div>
-
             <button id="submitBtn" class="btn btn-primary">Analisar</button>
+            <button id="historyBtn">Ver Histórico</button>
             <span id="spinner" class="ms-3 d-none">Processando...</span>
           </form>
 
@@ -38,8 +38,6 @@
           <div id="result" style="display:none;">
             <h6>Resultado</h6>
             <p><strong>Categoria:</strong> <span id="category"></span></p>
-            <p><strong>Confiança:</strong> <span id="confidence"></span></p>
-            <p><strong>Keywords encontradas:</strong> <pre id="keywords" class="small"></pre></p>
             <p><strong>Resposta sugerida:</strong></p>
             <div class="border rounded p-3 bg-white">
               <pre id="suggested" class="mb-0"></pre>
@@ -55,58 +53,4 @@
       </footer>
     </main>
 
-    <script>
-      const form = document.getElementById('emailForm')
-      const fileInput = document.getElementById('fileInput')
-      const textInput = document.getElementById('textInput')
-      const submitBtn = document.getElementById('submitBtn')
-      const spinner = document.getElementById('spinner')
-      const resultBox = document.getElementById('result')
-      const categoryEl = document.getElementById('category')
-      const confidenceEl = document.getElementById('confidence')
-      const keywordsEl = document.getElementById('keywords')
-      const suggestedEl = document.getElementById('suggested')
-      const previewEl = document.getElementById('preview')
-
-      form.addEventListener('submit', async (e) =>{
-          e.preventDefault();
-          submitBtn.disabled = true;
-          spinner.classList.remove('d-none');
-          resultBox.style.display = 'none';
-
-          const fd = new FormData();
-          if (fileInput.files.length > 0){
-              fd.append('file', fileInput.files[0]);
-          }
-          const text = textInput.value.trim();
-          if (text.length > 0){
-              fd.append('text', text);
-          }
-
-          try{
-              const res = await fetch("/api/classify", {
-                  method: 'POST',
-                  body: fd
-              });
-
-              if (!res.ok){
-                  const err = await res.json();
-                  alert("Erro: " + (err.error || res.statusText))
-                  return;
-              }
-
-              const data = await res.json();
-              categoryEl.textContent = data.category;
-              confidenceEl.textContent = data.confidence;
-              keywordsEl.textContent = JSON.stringify(data.matched_keywords, null, 2);
-              suggestedEl.textContent = data.suggested_response;
-              resultBox.style.display = 'block';
-          } catch (err){
-              console.error(err);
-              alert('Erro de comunicação com o servidor.');
-          } finally{
-              submitBtn.disabled = false;
-              spinner.classList.add('d-none');
-          }
-      });
-    </script>
+    <script src="./script.js"></script>

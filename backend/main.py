@@ -1,18 +1,20 @@
 import os
-import io
 import re
 import string
-import PyPDF2
-import google.generativeai as genai
-import sqlite3
-
+import fitz
+import csv
+import io
 
 from typing import Optional
-from fastapi import FastAPI, Depends, Form, Request, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, Depends, Form, UploadFile, File, APIRouter, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from fastapi.responses import StreamingResponse
+from datetime import datetime, time
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+from sqlalchemy import or_
+
 from sqlalchemy.orm import Session
 from .database import SessionLocal, Email
 
@@ -63,21 +65,6 @@ frontend_dir = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "f
 if os.path.isdir(frontend_dir):
     app.mount("/app", StaticFiles(directory=frontend_dir, html=True), name="frontend")
 
-def extract_text_from_pdf_bytes(b: bytes) -> str:
-    text = ""
-    try:
-        reader = PyPDF2.PdfReader(io.BytesIO(b))
-        for p in reader.pages:
-            page_text = p.extract_text()
-            if page_text:
-                text += page_text + "\n"
-    except Exception as e:
-        try:
-            text = b.decode("utf-8", errors="ignore")
-        except:
-            text = ""
-    return text
-
 def extract_text_from_txt_bytes(b: bytes) -> str:
     try:
         return b.decode("utf-8", errors="ignore")
@@ -102,33 +89,6 @@ def preprocess(text: str) -> str:
         tokens = [t for t in text.split() if t not in STOPWORDS_PT]
         return " ".join(tokens)
 
-def classify_by_keywords(text: str) -> dict:
-    if not text:
-        return {"category": "Improdutivo", "score": 0, "confidence": 0.5, "keywords": {}}
-    
-    lowered = text.lower()
-    matches = {}
-    score = 0
-    for kw in PROD_KEYWORDS:
-        if kw in lowered:
-            count = lowered.count(kw)
-            matches[kw] = count
-            score += count
-    
-    category = "Produtivo" if score > 0 else "Improdutivo"
-    
-    if score == 0:
-        confidence = 0.5
-    else:
-        confidence = min(0.99, 0.5 + 0.12 * score)
-    
-    return {
-        "category": category,
-        "score": score,
-        "confidence": round(confidence, 2),
-        "keywords": matches
-    }
-
 def get_db():
     db = SessionLocal()
     try:
@@ -137,10 +97,52 @@ def get_db():
         db.close()
 
 @app.post("/api/classify")
-async def classify_email(text: str = Form(...), db: Session = Depends(get_db)):
-    categoria, resposta = classify_email_with_gemini(text)
+async def classify_email(
+    text: Optional[str] = Form(None), 
+    file: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db)):
     
-    email = Email(texto=text, categoria=categoria, resposta=resposta)
+    content_text = None
+    
+    if file is not None:
+        try:
+            raw = await file.read()
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Erro ao ler o arquivo: {e}")
+
+        filename = (file.filename or "").lower()
+        if filename.endswith(".pdf"):
+            try:
+                doc = fitz.open(stream=raw, filetype="pdf")
+                pages_text = []
+                
+                for page_num in range(len(doc)):
+                    page = doc.load_page(page_num)
+                    page_text = page.get_text("text").strip()
+                    if page_text:
+                        pages_text.append(page_text)
+                content_text = "\n".join(pages_text).strip()
+                    
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Erro ao extrair texto do PDF: {e}")
+        elif filename.endswith(".txt"):
+            try:
+                content_text = extract_text_from_txt_bytes(raw).strip()
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Erro ao extrair o texto do TXT: {e}")
+        else:
+            raise HTTPException(status_code=400, detail="Formato de arquivo não suportado. Use .txt ou .pdf")
+    
+    if not content_text:
+        content_text = (text or "").strip()
+    
+    if not content_text:
+        raise HTTPException(status_code=400, detail="Nenhum texto fornecido para análise (arquivo vazio ou campo de texto em branco).")
+
+    
+    categoria, resposta = classify_email_with_gemini(content_text)
+    
+    email = Email(texto=content_text, categoria=categoria, resposta=resposta)
     db.add(email)
     db.commit()
     db.refresh(email)
@@ -150,18 +152,97 @@ async def classify_email(text: str = Form(...), db: Session = Depends(get_db)):
         "texto": email.texto,
         "categoria": email.categoria,
         "resposta": email.resposta,
-        "created_at": email.created_at
+        "created_at": email.created_at.isoformat()
     }
 
+def apply_history_filters(query, keyword: Optional[str], category: Optional[str],
+                          start_date: Optional[str], end_date: Optional[str]):
+    # keyword -> busca em texto ou resposta
+    if keyword and keyword.strip():
+        k = keyword.strip()
+        query = query.filter(or_(Email.texto.ilike(f"%{k}%"), Email.resposta.ilike(f"%{k}%")))
+
+    # category -> filtro por categoria (ilike para ser flexível)
+    if category and category.strip():
+        c = category.strip()
+        query = query.filter(Email.categoria.ilike(f"%{c}%"))
+
+    # datas: recebemos strings tipo "YYYY-MM-DD" (vêm do <input type="date">)
+    if start_date and start_date.strip():
+        try:
+            sd = datetime.strptime(start_date.strip(), "%Y-%m-%d")
+            # início do dia
+            sd = datetime.combine(sd.date(), time.min)
+            query = query.filter(Email.created_at >= sd)
+        except Exception:
+            pass
+
+    if end_date and end_date.strip():
+        try:
+            ed = datetime.strptime(end_date.strip(), "%Y-%m-%d")
+            # fim do dia
+            ed = datetime.combine(ed.date(), time.max)
+            query = query.filter(Email.created_at <= ed)
+        except Exception:
+            pass
+
+    return query
+
 @app.get("/api/history")
-def get_history(db: Session = Depends(get_db)):
-    emails = db.query(Email).order_by(Email.created_at.desc()).all()
+def get_history(
+    keyword: Optional[str] = Query(None),
+    category: Optional[str] = Query(None),
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
+    q = db.query(Email)
+    q = apply_history_filters(q, keyword, category, start_date, end_date)
+    emails = q.order_by(Email.created_at.desc()).all()
+
     return [
         {
-            "id": email.id,
-            "texto": email.texto,
-            "categoria": email.categoria,
-            "resposta": email.resposta,
-            "created_at": email.created_at
-        }for email in emails
+            "id": e.id,
+            "texto": e.texto,
+            "categoria": e.categoria,
+            "resposta": e.resposta,
+            "created_at": e.created_at.isoformat()
+        } for e in emails
     ]
+
+
+@app.get("/api/history/export/csv")
+def export_csv(db: Session = Depends(get_db)):
+    emails = db.query(Email).order_by(Email.created_at.desc()).all()
+    
+    stream = io.StringIO()
+    writer = csv.writer(stream)
+    writer.writerow(["ID", "Texto", "Categoria", "Resposta", "Data"])
+    for e in emails:
+        writer.writerow([e.id, e.texto, e.categoria, e.resposta, e.created_at])
+    
+    stream.seek(0)
+    return StreamingResponse(
+        iter([stream.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=history.csv"}
+    )
+
+@app.get("/api/history/export/pdf")
+def export_pdf(db: Session = Depends(get_db)):
+    emails = db.query(Email).order_by(Email.created_at.desc()).all()
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=letter)
+    width, height = letter
+    y = height - 50
+
+    for e in emails:
+        c.drawString(30, y, f"{e.created_at}: [{e.categoria}] {e.texto[:80]}...") # resumo
+        y -= 15
+        if y < 50:
+            c.showPage()
+            y = height - 50
+
+    c.save()
+    buffer.seek(0)
+    return StreamingResponse(buffer, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=history.pdf"})

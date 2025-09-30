@@ -1,7 +1,7 @@
 fastapi
 uvicorn[standard]
 python-multipart
-PyPDF2
+PyMuPDF
 nltk
 sqlalchemy
 google-generativeai

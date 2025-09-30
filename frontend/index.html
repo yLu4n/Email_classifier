@@ -18,39 +18,59 @@
         <div class="card-body">
           <h5 class="card-title">Carregue um e-mail (.txt / .pdf) ou cole o texto</h5>
 
-          <form id="emailForm" method="post">
+          <form id="emailForm" method="post" enctype="multipart/form-data">
+            <div class="mb-3">
+              <label class="form-label">Ou cole o texto do e-mail</label>
+              <textarea id="textInput" class="form-control" rows="7" placeholder="Cole o corpo do e-mail aqui..."></textarea>
+            </div>
+
             <div class="mb-3">
               <label class="form-label">Arquivo (.txt ou .pdf)</label>
               <input class="form-control" type="file" id="fileInput" accept=".txt, .pdf" />
             </div>
 
-            <div class="mb-3">
-              <label class="form-label">Ou cole o texto do e-mail</label>
-              <textarea id="textInput" class="form-control" rows="7" placeholder="Cole o corpo do e-mail aqui..."></textarea>
-            </div>
             <button id="submitBtn" class="btn btn-primary">Analisar</button>
-            <button id="historyBtn">Ver Histórico</button>
+            <button type="button" id="historyBtn" class="btn btn-secondary">Ver Histórico</button>
             <span id="spinner" class="ms-3 d-none">Processando...</span>
           </form>
 
           <hr />
 
+          <div class="card shadow-sm mb-4">
+            <div class="card-body">
+              <h5>Filtros e Exportação</h5>
+              <div class="row g-2 mb-3">
+                <div class="col"><input type="text" id="filterKeyword" class="form-control" placeholder="Palavra-chave"></div>
+                <div class="col"><input type="text" id="filterCategory" class="form-control" placeholder="Categoria"></div>
+                <div class="col"><input type="date" id="filterStartDate" class="form-control"></div>
+                <div class="col"><input type="date" id="filterEndDate" class="form-control"></div>
+                <div class="col-auto"><button type="button" id="filterBtn" class="btn btn-primary">Filtrar</button></div>
+                <div class="col-auto"><button type="button" id="exportCsvBtn" class="btn btn-success">Exportar CSV</button></div>
+                <div class="col-auto"><button type="button" id="exportPdfBtn" class="btn btn-danger">Exportar PDF</button></div>
+              </div>
+
+              <div id="history"></div>
+            </div>
+          </div>
+
           <div id="result" style="display:none;">
             <h6>Resultado</h6>
             <p><strong>Categoria:</strong> <span id="category"></span></p>
             <p><strong>Resposta sugerida:</strong></p>
-            <div class="border rounded p-3 bg-white">
-              <pre id="suggested" class="mb-0"></pre>
+            <div class="border rounded p-3 bg-white d-flex justify-content-between align-items-start">
+              <pre id="suggested" class="mb-0 flex-grow-1"></pre>
+              <button type="button" id="copyBtn" class="btn btn-outline-secondary ms-3">Copiar</button>
             </div>
-            <details class="mt-2"><summary>Prévia do texto processado</summary><pre id="preview" class="small"></pre></details>
+            <details class="mt-2">
+              <summary>Prévia do texto processado</summary>
+              <pre id="preview" class="small"></pre>
+            </details>
           </div>
 
         </div>
       </div>
-
-      <footer class="mt-4 text-muted small">
-        <div>Use como POC — para produção, integrar modelo treinado / OpenAI e autenticação.</div>
-      </footer>
     </main>
 
     <script src="./script.js"></script>
+  </body>
+</html>

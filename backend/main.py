@@ -139,17 +139,14 @@ async def classify_email(
 
 def apply_history_filters(query, keyword: Optional[str], category: Optional[str],
                           start_date: Optional[str], end_date: Optional[str]):
-    # keyword -> busca em texto ou resposta
     if keyword and keyword.strip():
         k = keyword.strip()
         query = query.filter(or_(Email.texto.ilike(f"%{k}%"), Email.resposta.ilike(f"%{k}%")))
 
-    # category -> filtro por categoria (ilike para ser flexível)
     if category and category.strip():
         c = category.strip()
         query = query.filter(Email.categoria.ilike(f"%{c}%"))
 
-    # datas: recebemos strings tipo "YYYY-MM-DD" (vêm do <input type="date">)
     if start_date and start_date.strip():
         try:
             sd = datetime.strptime(start_date.strip(), "%Y-%m-%d")

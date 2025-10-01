@@ -42,3 +42,31 @@ Este é um **Case de estágio da AutoU** desenvolvido em Python com FastAPI, HTM
     pip install -r requirements.txt
 
 ## Rode a aplicação
+    uvicorn backend.main:app --reload
+
+## Acesse o link pelo navegador
+    http://127.0.0.1:8000/app
+
+# Banco de dados
+    O projeto usa SQLite por padrão, armazenado no arquivo emails.db.
+    Caso queira trocar para outro banco (ex: PostgreSQL), basta editar database.py e configurar a variável DATABASE_URL
+
+# Tecnologias
+    FastAPI
+    - API backend
+
+    SQLite
+    - Banco de dados
+
+    SQLAlchemy
+    - ORM
+
+    PyMuPDF (fitz)
+    - Leitura de PDFs
+
+    Bootstrap 5
+    - UI/UX
+
+    Render
+    - Deploy
+

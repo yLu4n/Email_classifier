@@ -71,24 +71,6 @@ def extract_text_from_txt_bytes(b: bytes) -> str:
     except:
         return b.decode("latin-1", errors="ignore")
 
-def preprocess(text: str) -> str:
-    if not text:
-        return ""
-    text = text.lower()
-    text = re.sub(r"\s+", " ", text)
-    text = text.translate(str.maketrans("", "", string.punctuation))
-    
-    if NLTK_AVAILABLE:
-        try:
-            tokens = word_tokenize(text, language="portuguese")
-            tokens = [t for t in tokens if t not in STOPWORDS_PT]
-            return " ".join(tokens)
-        except Exception:
-            return text
-    else:
-        tokens = [t for t in text.split() if t not in STOPWORDS_PT]
-        return " ".join(tokens)
-
 def get_db():
     db = SessionLocal()
     try:

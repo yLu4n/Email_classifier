@@ -1,12 +1,10 @@
 import os
-import re
-import string
 import fitz
 import csv
 import io
 
 from typing import Optional
-from fastapi import FastAPI, Depends, Form, UploadFile, File, APIRouter, HTTPException, Query
+from fastapi import FastAPI, Depends, Form, UploadFile, File, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import StreamingResponse
@@ -20,14 +18,6 @@ from .database import SessionLocal, Email
 
 from .classifier import classify_email_with_gemini
 
-try:
-    import nltk
-    from nltk.corpus import stopwords
-    from nltk.tokenize import word_tokenize
-    NLTK_AVAILABLE = True
-except Exception:
-    NLTK_AVAILABLE = False
-
 
 app = FastAPI(title="Email Classifier API")
 
@@ -37,29 +27,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-if NLTK_AVAILABLE:
-    try:
-        nltk.data.find("tokenizers/punkt")
-    except:
-        nltk.download("punkt")
-    try:
-        nltk.data.find("corpora/stopwords")
-    except:
-        nltk.download("stopwords")
-
-    try:
-        STOPWORDS_PT = set(stopwords.words("portuguese"))
-    except Exception:
-        STOPWORDS_PT = set()
-else:
-    STOPWORDS_PT = set()
-
-PROD_KEYWORDS = [
-    "solicit", "solicita", "solicitação", "por favor", "precis", "erro", "problema",
-    "anexo", "status", "atualiz", "suport", "ticket", "reuni", "urgente", "duvid",
-    "dúvid", "pedido", "encaminh", "document", "enviado", "enviar", "aplica", "ajuda"
-]
 
 frontend_dir = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "frontend"))
 if os.path.isdir(frontend_dir):

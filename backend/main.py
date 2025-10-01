@@ -63,7 +63,7 @@ PROD_KEYWORDS = [
 
 frontend_dir = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "frontend"))
 if os.path.isdir(frontend_dir):
-    app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
+    app.mount("/app", StaticFiles(directory=frontend_dir, html=True), name="frontend")
 
 def extract_text_from_txt_bytes(b: bytes) -> str:
     try:

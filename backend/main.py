@@ -215,15 +215,15 @@ def get_history(
 def export_csv(db: Session = Depends(get_db)):
     emails = db.query(Email).order_by(Email.created_at.desc()).all()
     
-    stream = io.StringIO()
-    writer = csv.writer(stream)
+    stream = io.StringIO(newline="")
+    writer = csv.writer(stream, delimiter=";", quoting=csv.QUOTE_MINIMAL)
     writer.writerow(["ID", "Texto", "Categoria", "Resposta", "Data"])
     for e in emails:
         writer.writerow([e.id, e.texto, e.categoria, e.resposta, e.created_at])
     
     stream.seek(0)
     return StreamingResponse(
-        iter([stream.getvalue()]),
+        iter([stream.getvalue().encode("utf-8-sig")]),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=history.csv"}
     )
